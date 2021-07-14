@@ -33,7 +33,3 @@ def test_unet_2d_valid_output_ones(downsample_factors):
     out = m(x)
 
     assert torch.all(torch.isclose(out, torch.tensor(1.0))), f"{out=}"
-
-
-if __name__ == '__main__':
-    test_unet_2d_valid_unit_output()
