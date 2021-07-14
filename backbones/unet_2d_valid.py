@@ -270,8 +270,14 @@ class Unet2dValid(nn.Module):
 
         return x[slices]
 
-    def valid_input_size_seq(self, n):
-        raise NotImplementedError()
+    def valid_input_sizes_seq(self, n):
+
+        sizes = []
+        for i in range(n + 1):
+            if self.is_valid_input_size(i):
+                sizes.append(i)
+
+        return sizes
 
     def is_valid_input_size(self, size):
 
