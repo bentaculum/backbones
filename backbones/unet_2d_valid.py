@@ -128,6 +128,7 @@ class Unet2dValid(nn.Module):
         out_channels,
         kernel_sizes=((3, 3), (3, 3)),
         activation='ReLU',
+        constant_upsample=True,
         batch_norm=False,
     ):
 
@@ -149,6 +150,7 @@ class Unet2dValid(nn.Module):
         self.out_channels = out_channels
         self.kernel_sizes = kernel_sizes
         self.activation = activation
+        self.constant_upsample = constant_upsample
         self.batch_norm = batch_norm
 
         self.levels = len(downsample_factors) + 1
@@ -175,15 +177,24 @@ class Unet2dValid(nn.Module):
         ])
 
         # right upsample layers
-        self.r_up = nn.ModuleList([
-            nn.ConvTranspose2d(
-                in_channels=initial_fmaps * fmap_inc_factor**(level + 1),
-                out_channels=initial_fmaps * fmap_inc_factor**(level + 1),
-                kernel_size=downsample_factors[level],
-                stride=downsample_factors[level],
-            )
-            for level in range(self.levels - 1)
-        ])
+        if constant_upsample:
+            self.r_up = nn.ModuleList([
+                nn.Upsample(
+                    scale_factor=downsample_factors[level],
+                    mode='nearest'
+                )
+                for level in range(self.levels - 1)
+            ])
+        else:
+            self.r_up = nn.ModuleList([
+                nn.ConvTranspose2d(
+                    in_channels=initial_fmaps * fmap_inc_factor**(level + 1),
+                    out_channels=initial_fmaps * fmap_inc_factor**(level + 1),
+                    kernel_size=downsample_factors[level],
+                    stride=downsample_factors[level],
+                )
+                for level in range(self.levels - 1)
+            ])
 
         # right convolutional passes
         self.r_conv = nn.ModuleList([
