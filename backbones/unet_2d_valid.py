@@ -307,9 +307,6 @@ class Unet2dValid(nn.Module):
             return s
 
         out = rec(self.levels - 1, size)
-        print(out)
-
         if out is not False:
             out = True
-
         return out
