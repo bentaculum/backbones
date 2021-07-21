@@ -214,6 +214,25 @@ class Unet2dValid(nn.Module):
         self.head = nn.Conv2d(
             max(initial_fmaps, out_channels), out_channels, 1)
 
+        # Initialize all Conv2d with Kaiming init
+        def init_kaiming(m):
+            if self.activation == 'ReLU':
+                nonlinearity = 'relu'
+            elif self.activation == 'LeakyReLU':
+                nonlinearity = 'leaky_relu'
+            else:
+                raise ValueError(
+                    f"Kaiming init not applicable for activation {self.activation}.")
+            if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
+                nn.init.kaiming_normal_(
+                    m.weight,
+                    nonlinearity=nonlinearity)
+                nn.init.zeros_(m.bias)
+
+        if activation in ('ReLU', 'LeakyReLU'):
+            self.apply(init_kaiming)
+            logger.debug("Initialize conv weights with Kaiming init.")
+
     def forward(self, x):
 
         if not self.is_valid_input_size(x.shape[2:]):
