@@ -9,35 +9,35 @@ logger = logging.getLogger(__name__)
 class ConvBlock(nn.Module):
     """ConvBlock.
 
-        Args:
+    Args:
 
-            in_channels (``int``):
+        in_channels (``int``):
 
-                The number of input channels for the first convolution in the
-                block.
+            The number of input channels for the first convolution in the
+            block.
 
-            out_channels (``int``):
+        out_channels (``int``):
 
-                The number of output channels for all convolutions in the
-                block.
+            The number of output channels for all convolutions in the
+            block.
 
-            kernel_sizes (``tuple`` of ``tuple``):
+        kernel_sizes (``tuple`` of ``tuple``):
 
-                The number of tuples determines the number of
-                convolutional layers in each ConvBlock. If not given, each
-                ConvBlock will consist of two 3x3 convolutions.
+            The number of tuples determines the number of
+            convolutional layers in each ConvBlock. If not given, each
+            ConvBlock will consist of two 3x3 convolutions.
 
-            activation (``str``):
+        activation (``str``):
 
-                Which activation to use after a convolution. Accepts the name
-                of any torch activation function (e.g., ``ReLU`` for
-                ``torch.nn.ReLU``).
+            Which activation to use after a convolution. Accepts the name
+            of any torch activation function (e.g., ``ReLU`` for
+            ``torch.nn.ReLU``).
 
-            batch_norm (``bool``):
+        batch_norm (``bool``):
 
-                If set to ``True``, apply 2d batch normalization after each
-                convolution.
-        """
+            If set to ``True``, apply 2d batch normalization after each
+            convolution.
+    """
 
     def __init__(
         self,
@@ -74,50 +74,50 @@ class Unet2dValid(nn.Module):
     This model includes a 1x1Conv-head to return the desired
     number of out_channels.
 
-        Args:
+    Args:
 
-            in_channels:
+        in_channels:
 
-                The number of input channels.
+            The number of input channels.
 
-            inital_fmaps:
+        inital_fmaps:
 
-                The number of feature maps in the first layer. This is also the
-                number of output feature maps. Stored in the ``channels``
-                dimension.
+            The number of feature maps in the first layer. This is also the
+            number of output feature maps. Stored in the ``channels``
+            dimension.
 
-            fmap_inc_factor:
+        fmap_inc_factor:
 
-                By how much to multiply the number of feature maps between
-                layers. If layer 0 has ``k`` feature maps, layer ``l`` will
-                have ``k*fmap_inc_factor**l``.
+            By how much to multiply the number of feature maps between
+            layers. If layer 0 has ``k`` feature maps, layer ``l`` will
+            have ``k*fmap_inc_factor**l``.
 
-            downsample_factors:
+        downsample_factors:
 
-                Tuple of tuples ``(x, y)`` to use to down- and up-sample the
-                feature maps between layers.
+            Tuple of tuples ``(x, y)`` to use to down- and up-sample the
+            feature maps between layers.
 
-            out_channels:
+        out_channels:
 
-                The number of output_channels of the head.
+            The number of output_channels of the head.
 
-            kernel_sizes (optional):
+        kernel_sizes (optional):
 
-                Tuple of tuples. The number of tuples determines the number of
-                convolutional layers in each ConvBlock. If not given, each
-                ConvBlock will consist of two 3x3 convolutions.
+            Tuple of tuples. The number of tuples determines the number of
+            convolutional layers in each ConvBlock. If not given, each
+            ConvBlock will consist of two 3x3 convolutions.
 
-            activation (optional):
+        activation (optional):
 
-                Which activation to use after a convolution. Accepts the name
-                of any tensorflow activation function (e.g., ``ReLU`` for
-                ``torch.nn.ReLU``).
+            Which activation to use after a convolution. Accepts the name
+            of any tensorflow activation function (e.g., ``ReLU`` for
+            ``torch.nn.ReLU``).
 
-            batch_norm (optional):
+        batch_norm (optional):
 
-                If set to ``True``, apply 2d batch normalization after each
-                convolution in the ConvBlocks.
-        """
+            If set to ``True``, apply 2d batch normalization after each
+            convolution in the ConvBlocks.
+    """
 
     def __init__(
         self,
