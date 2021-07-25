@@ -127,7 +127,7 @@ class Unet2dValid(nn.Module):
         downsample_factors,
         out_channels,
         kernel_sizes=((3, 3), (3, 3)),
-        activation='ReLU',
+        activation='LeakyReLU',
         constant_upsample=True,
         batch_norm=False,
     ):
