@@ -1,3 +1,8 @@
+"""
+Adapted from
+https://github.com/funkelab/funlib.learn.torch/blob/master/funlib/learn/torch/models/unet.py
+"""
+
 import logging
 import numpy as np
 import torch
