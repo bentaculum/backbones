@@ -42,6 +42,16 @@ class ConvBlock(nn.Module):
 
             If set to ``True``, apply 2d batch normalization after each
             convolution.
+
+        padding (``int``):
+
+            Padding added to both sides of the input. Defaults to 0.
+
+        padding_mode (``str``):
+
+            `torch.nn.Conv2d` padding modes: `zeros`, `reflect`, `replicate` or
+            `circular`.
+
     """
 
     def __init__(
@@ -51,6 +61,8 @@ class ConvBlock(nn.Module):
         kernel_sizes,
         activation,
         batch_norm=False,
+        padding=0,
+        padding_mode='replicate'
     ):
 
         super().__init__()
@@ -58,7 +70,13 @@ class ConvBlock(nn.Module):
         layers = []
 
         for k in kernel_sizes:
-            layers.append(nn.Conv2d(in_channels, out_channels, k))
+            layers.append(nn.Conv2d(
+                in_channels=in_channels,
+                out_channels=out_channels,
+                kernel_size=k,
+                padding=padding,
+                padding_mode=padding_mode,
+            ))
             if batch_norm:
                 layers.append(nn.BatchNorm2d(out_channels))
             layers.append(getattr(nn, activation)())
@@ -72,8 +90,8 @@ class ConvBlock(nn.Module):
         return self.conv_block(x)
 
 
-class Unet2dValid(nn.Module):
-    """Unet for 2d inputs with valid padding.
+class Unet2d(nn.Module):
+    """Unet for square 2d inputs with isotropic operations.
 
     Input tensors are expected to be of shape ``(B, C, H, W)``.
     This model includes a 1x1Conv-head to return the desired
@@ -115,13 +133,22 @@ class Unet2dValid(nn.Module):
         activation (optional):
 
             Which activation to use after a convolution. Accepts the name
-            of any tensorflow activation function (e.g., ``ReLU`` for
+            of any torch activation function (e.g., ``ReLU`` for
             ``torch.nn.ReLU``).
 
         batch_norm (optional):
 
             If set to ``True``, apply 2d batch normalization after each
             convolution in the ConvBlocks.
+
+        padding (``int``):
+
+            Padding added to both sides of the convolutions. Defaults to 0.
+
+        padding_mode (``str``):
+
+            `torch.nn.Conv2d` padding modes: `zeros`, `reflect`, `replicate` or
+            `circular`.
     """
 
     def __init__(
@@ -135,6 +162,8 @@ class Unet2dValid(nn.Module):
         activation='LeakyReLU',
         constant_upsample=True,
         batch_norm=False,
+        padding=0,
+        padding_mode='replicate',
     ):
 
         super().__init__()
@@ -151,12 +180,24 @@ class Unet2dValid(nn.Module):
             if not isinstance(d, tuple):
                 raise ValueError(
                     "Downsample factors have to be a list of tuples.")
+            if not np.all(np.array(d) == d[0]):
+                raise NotImplementedError(
+                    "Anisotropic downsampling not implemented.")
         self.downsample_factors = downsample_factors
+
         self.out_channels = out_channels
+        for k in kernel_sizes:
+            if not np.all(np.array(k) == k[0]):
+                raise ValueError((
+                    f"Anisotropic convolutional kernel {k} not supported."
+                ))
+
         self.kernel_sizes = kernel_sizes
         self.activation = activation
         self.constant_upsample = constant_upsample
         self.batch_norm = batch_norm
+        self.padding = padding
+        self.padding_mode = padding_mode
 
         self.levels = len(downsample_factors) + 1
 
@@ -168,7 +209,9 @@ class Unet2dValid(nn.Module):
                 initial_fmaps * fmap_inc_factor**level,
                 kernel_sizes,
                 activation,
-                batch_norm
+                batch_norm,
+                padding,
+                padding_mode,
             )
             for level in range(self.levels)
         ])
@@ -210,7 +253,9 @@ class Unet2dValid(nn.Module):
                 if level != 0 else max(initial_fmaps, out_channels),
                 kernel_sizes,
                 activation,
-                batch_norm
+                batch_norm,
+                padding,
+                padding_mode,
             )
             for level in range(self.levels - 1)
         ])
@@ -240,11 +285,12 @@ class Unet2dValid(nn.Module):
 
     def forward(self, x):
 
-        if not self.is_valid_input_size(x.shape[2:]):
-            raise ValueError((
-                f"Input size {x.shape[2:]} is not valid for"
-                " this Unet instance."
-            ))
+        if self.padding == 0:
+            if not self.is_valid_input_size(x.shape[2:]):
+                raise ValueError((
+                    f"Input size {x.shape[2:]} is not valid for"
+                    " this Unet instance."
+                ))
 
         if self.batch_norm and x.shape[0] == 1:
             raise ValueError((
@@ -322,26 +368,27 @@ class Unet2dValid(nn.Module):
         ds_factors = [np.array(x, dtype=np.int_)
                       for x in self.downsample_factors]
         kernel_sizes = np.array(self.kernel_sizes, dtype=np.int_)
+        p = self.padding
 
         def rec(level, s):
             # index of level in layer arrays
             i = self.levels - level - 1
             for k in kernel_sizes:
-                s = s - (k - 1)
+                s = s - (k - 1) + 2 * p
                 if np.any(s < 1):
                     return False
             if level == 0:
                 return s
             else:
                 # down
-                if np.any(s % 2 == 1):
+                if np.any(s % ds_factors[i] != 0):
                     return False
                 s = s // ds_factors[i]
                 s = rec(level - 1, s)
                 # up
                 s = s * ds_factors[i]
                 for k in kernel_sizes:
-                    s = s - (k - 1)
+                    s = s - (k - 1) + 2 * p
                     if np.any(s < 1):
                         return False
 
@@ -350,4 +397,5 @@ class Unet2dValid(nn.Module):
         out = rec(self.levels - 1, size)
         if out is not False:
             out = True
+
         return out
