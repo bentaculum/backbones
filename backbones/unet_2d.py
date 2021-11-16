@@ -90,6 +90,26 @@ class ConvBlock(nn.Module):
         return self.conv_block(x)
 
 
+class MaxPool2dDividing(nn.MaxPool2d):
+
+    def __init__(self, *args, **kwargs):
+
+        super().__init__(*args, **kwargs)
+        assert self.padding == 0
+        assert self.kernel_size == self.stride
+        assert self.dilation == 1
+
+    def forward(self, input):
+        if torch.any(torch.tensor(input.shape[-2:], device=input.device) %
+                     torch.tensor(self.kernel_size, device=input.device) != 0):
+            raise ValueError((
+                f"Kernel size of {self} does not divide input of shape "
+                f"{input.shape} "
+            ))
+
+        return super().forward(input)
+
+
 class Unet2d(nn.Module):
     """Unet for square 2d inputs with isotropic operations.
 
@@ -218,7 +238,7 @@ class Unet2d(nn.Module):
 
         # left downsample layers
         self.l_down = nn.ModuleList([
-            nn.MaxPool2d(
+            MaxPool2dDividing(
                 kernel_size=downsample_factors[level],
                 stride=downsample_factors[level]
             ) for level in range(self.levels - 1)
