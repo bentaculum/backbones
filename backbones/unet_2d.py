@@ -43,6 +43,11 @@ class ConvBlock(nn.Module):
             If set to ``True``, apply 2d batch normalization after each
             convolution.
 
+        group_norm (``int``):
+
+            Number of disjunct groups for group normalization.
+            If set to ``False`` group normalization is not applied.
+
         padding (``int``):
 
             Padding added to both sides of the input. Defaults to 0.
@@ -61,6 +66,7 @@ class ConvBlock(nn.Module):
         kernel_sizes,
         activation,
         batch_norm=False,
+        group_norm=False,
         padding=0,
         padding_mode='replicate'
     ):
@@ -79,6 +85,11 @@ class ConvBlock(nn.Module):
             ))
             if batch_norm:
                 layers.append(nn.BatchNorm2d(out_channels))
+            if isinstance(group_norm, int) and group_norm > 0:
+                layers.append(nn.GroupNorm(
+                    num_groups=group_norm,
+                    num_channels=out_channels,
+                ))
             layers.append(getattr(nn, activation)())
 
             in_channels = out_channels
@@ -161,6 +172,11 @@ class Unet2d(nn.Module):
             If set to ``True``, apply 2d batch normalization after each
             convolution in the ConvBlocks.
 
+        group_norm (``int``):
+
+            Number of disjunct groups for group normalization.
+            If set to ``False`` group normalization is not applied.
+
         padding (``int``):
 
             Padding added to both sides of the convolutions. Defaults to 0.
@@ -182,6 +198,7 @@ class Unet2d(nn.Module):
         activation='LeakyReLU',
         constant_upsample=True,
         batch_norm=False,
+        group_norm=False,
         padding=0,
         padding_mode='replicate',
     ):
@@ -215,7 +232,14 @@ class Unet2d(nn.Module):
         self.kernel_sizes = kernel_sizes
         self.activation = activation
         self.constant_upsample = constant_upsample
+
+        if group_norm and batch_norm:
+            raise ValueError("Do not apply multiple normalization approaches.")
         self.batch_norm = batch_norm
+        if group_norm > initial_fmaps:
+            raise ValueError(f"{group_norm=} bigger {initial_fmaps=}.")
+        self.group_norm = group_norm
+
         self.padding = padding
         self.padding_mode = padding_mode
 
@@ -224,14 +248,15 @@ class Unet2d(nn.Module):
         # left convolutional passes
         self.l_conv = nn.ModuleList([
             ConvBlock(
-                in_channels if level == 0 else initial_fmaps *
+                in_channels=in_channels if level == 0 else initial_fmaps *
                 fmap_inc_factor**(level - 1),
-                initial_fmaps * fmap_inc_factor**level,
-                kernel_sizes,
-                activation,
-                batch_norm,
-                padding,
-                padding_mode,
+                out_channels=initial_fmaps * fmap_inc_factor**level,
+                kernel_sizes=kernel_sizes,
+                activation=activation,
+                batch_norm=batch_norm,
+                group_norm=group_norm,
+                padding=padding,
+                padding_mode=padding_mode,
             )
             for level in range(self.levels)
         ])
@@ -267,15 +292,16 @@ class Unet2d(nn.Module):
         # right convolutional passes
         self.r_conv = nn.ModuleList([
             ConvBlock(
-                initial_fmaps * fmap_inc_factor**level +
+                in_channels=initial_fmaps * fmap_inc_factor**level +
                 initial_fmaps * fmap_inc_factor**(level + 1),
-                initial_fmaps * fmap_inc_factor**level
+                out_channels=initial_fmaps * fmap_inc_factor**level
                 if level != 0 else max(initial_fmaps, out_channels),
-                kernel_sizes,
-                activation,
-                batch_norm,
-                padding,
-                padding_mode,
+                kernel_sizes=kernel_sizes,
+                activation=activation,
+                batch_norm=batch_norm,
+                group_norm=group_norm,
+                padding=padding,
+                padding_mode=padding_mode,
             )
             for level in range(self.levels - 1)
         ])

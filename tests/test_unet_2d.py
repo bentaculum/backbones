@@ -40,7 +40,17 @@ def test_unet_2d_valid_output_ones(downsample_factors, constant_upsample):
 
 @pytest.mark.parametrize("downsample_factors", [[(4, 4)], [(3, 3), (2, 2)]])
 @pytest.mark.parametrize("constant_upsample", [False, True])
-def test_unet_2d_padding(downsample_factors, constant_upsample):
+@pytest.mark.parametrize("batch_norm", [False, True])
+@pytest.mark.parametrize("group_norm", [False, 1, 2, 4])
+def test_unet_2d_padding(
+        downsample_factors,
+        constant_upsample,
+        batch_norm,
+        group_norm
+):
+
+    if group_norm and batch_norm:
+        return
 
     m = Unet2d(
         in_channels=3,
@@ -50,10 +60,12 @@ def test_unet_2d_padding(downsample_factors, constant_upsample):
         out_channels=3,
         kernel_sizes=((3, 3), (3, 3)),
         constant_upsample=constant_upsample,
-        batch_norm=False,
+        batch_norm=batch_norm,
+        group_norm=group_norm,
         padding=1,
         padding_mode='replicate',
     )
+
     sizes = m.valid_input_sizes_seq(100)
     for s in sizes:
         x = torch.ones(2, 3, s, s)
@@ -66,6 +78,11 @@ def test_unet_2d_padding(downsample_factors, constant_upsample):
             if isinstance(l, torch.nn.ConvTranspose2d):
                 init.constant_(l.weight, 1 / l.in_channels)
                 init.zeros_(l.bias)
+
+            if isinstance(l, torch.nn.BatchNorm2d) or isinstance(
+                    l, torch.nn.GroupNorm):
+                init.zeros_(l.weight)
+                init.ones_(l.bias)
 
         out = m(x)
 
