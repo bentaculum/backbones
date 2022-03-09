@@ -4,6 +4,7 @@ https://github.com/funkelab/funlib.learn.torch/blob/master/funlib/learn/torch/mo
 """
 
 import logging
+import itertools
 import numpy as np
 import torch
 import torch.nn as nn
@@ -185,6 +186,12 @@ class Unet2d(nn.Module):
 
             `torch.nn.Conv2d` padding modes: `zeros`, `reflect`, `replicate` or
             `circular`.
+
+        pad_input (``bool``):
+
+            If set to ``True``, input tensors are padded to the smallest
+            feasible input size using `padding_mode`. Only implemented for
+            same padding, where it's ensured that input size equals output size.
     """
 
     def __init__(
@@ -201,6 +208,7 @@ class Unet2d(nn.Module):
         group_norm=False,
         padding=0,
         padding_mode='replicate',
+        pad_input=False,
     ):
 
         super().__init__()
@@ -242,6 +250,13 @@ class Unet2d(nn.Module):
 
         self.padding = padding
         self.padding_mode = padding_mode
+        self.pad_input = pad_input
+        if pad_input and \
+                not all([all([(d - 1) / 2 == self.padding for d in k])
+                         for k in kernel_sizes]):
+            # pad_input only implemented for `same` padding
+            raise NotImplementedError(
+                "`pad_input` only implemented for `same` padding.")
 
         self.levels = len(downsample_factors) + 1
 
@@ -331,6 +346,11 @@ class Unet2d(nn.Module):
 
     def forward(self, x):
 
+        x_spatial_shape = x.shape[2:]
+
+        if self.pad_input:
+            x = self._pad_input(x)
+
         if self.padding == 0:
             if not self.is_valid_input_size(x.shape[2:]):
                 raise ValueError((
@@ -345,7 +365,14 @@ class Unet2d(nn.Module):
             ))
 
         features = self.rec_forward(self.levels - 1, x)
-        return self.head(features)
+        out = self.head(features)
+
+        if self.pad_input:
+            # pad_input only implemented for same padding
+            # assert in __init__
+            out = self.crop(out, x_spatial_shape)
+
+        return out
 
     def rec_forward(self, level, f_in):
 
@@ -396,6 +423,38 @@ class Unet2d(nn.Module):
             for o, s in zip(offset, x_target_size))
 
         return x[slices]
+
+    def pad(self, x, shape):
+        """Center-pad x to match spatial dimensions given by shape."""
+
+        pad_total = tuple(
+            a - b for a, b in zip(shape, x.size()[-2:])
+        )
+
+        pad_begin = tuple(
+            t // 2 for t in pad_total
+        )
+
+        pad_end = tuple(
+            (t + 1) // 2 for t in pad_total
+        )
+        # reverse axis order and interleave padding tuples
+        # for torch.nn.functional.pad
+        pad = tuple(itertools.chain(
+            *zip(reversed(pad_begin), reversed(pad_end))))
+
+        return torch.nn.functional.pad(
+            input=x, pad=pad, mode=self.padding_mode)
+
+    def _pad_input(self, x):
+        target_shape = []
+        for s in x.shape[-2:]:
+            _s = s
+            while not self.is_valid_input_size(_s):
+                _s += 1
+            target_shape.append(_s)
+
+        return self.pad(x, tuple(target_shape))
 
     def valid_input_sizes_seq(self, n):
 
