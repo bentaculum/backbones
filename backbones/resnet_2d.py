@@ -142,12 +142,6 @@ class Resnet2d(nn.Module):
             number of output feature maps. Stored in the ``channels``
             dimension.
 
-        fmap_inc_factor:
-
-            By how much to multiply the number of feature maps between
-            layers. If layer 0 has ``k`` feature maps, layer ``l`` will
-            have ``k*fmap_inc_factor**l``.
-
         downsample_factors:
 
             Tuple of ints to use to downsample the
@@ -156,6 +150,12 @@ class Resnet2d(nn.Module):
         out_features:
 
             The number of output features of the head.
+
+        fmap_inc_factor:
+
+            By how much to multiply the number of feature maps between
+            blocks. If block 0 has ``k`` feature maps, layer ``l`` will
+            have ``k*fmap_inc_factor**l``.
 
         kernel_sizes (optional):
 
@@ -191,9 +191,9 @@ class Resnet2d(nn.Module):
         self,
         in_channels,
         initial_fmaps,
-        fmap_inc_factor,
         downsample_factors,
         out_features,
+        fmap_inc_factor=2,
         kernel_sizes=(3, 3),
         activation=nn.LeakyReLU,
         batch_norm=True,
@@ -253,7 +253,8 @@ class Resnet2d(nn.Module):
             nn.AdaptiveAvgPool2d(output_size=(1, 1)),
             nn.Flatten(),
             nn.Linear(
-                in_features=initial_fmaps * fmap_inc_factor ** (self.levels - 1),
+                in_features=initial_fmaps *
+                fmap_inc_factor ** (self.levels - 1),
                 out_features=out_features,
             ),
         )

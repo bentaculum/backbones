@@ -12,7 +12,6 @@ def test_unet_2d_valid_output_ones(downsample_factors, batch_norm):
     m = Resnet2d(
         in_channels=3,
         initial_fmaps=4,
-        fmap_inc_factor=2,
         downsample_factors=downsample_factors,
         out_features=5,
         batch_norm=batch_norm,
