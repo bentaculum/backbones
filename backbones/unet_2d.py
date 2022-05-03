@@ -358,7 +358,7 @@ class Unet2d(nn.Module):
                     " this Unet instance."
                 ))
 
-        if self.batch_norm and x.shape[0] == 1:
+        if self.batch_norm and x.shape[0] == 1 and self.training:
             raise ValueError((
                 "This Unet performs batch normalization, "
                 "therefore inputs with batch size 1 are not allowed."
