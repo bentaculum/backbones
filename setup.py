@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name="backbones",
@@ -8,6 +8,7 @@ setup(
     author="Benjamin Gallusser",
     author_email="benjamin.gallusser@epfl.ch",
     license="MIT",
+    packages=find_packages(),
     install_requires=[
         'pytest',
         'torch',
