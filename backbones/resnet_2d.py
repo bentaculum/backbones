@@ -185,6 +185,10 @@ class Resnet2d(nn.Module):
 
             `torch.nn.Conv2d` padding modes: `zeros`, `reflect`, `replicate` or
             `circular`.
+
+        fully_convolutional (``bool``):
+
+            If set to ``True``, the head will not use global average pooling and a linear layer.
     """
 
     def __init__(
@@ -200,6 +204,7 @@ class Resnet2d(nn.Module):
         group_norm=False,
         padding=1,
         padding_mode="replicate",
+        fully_convolutional=False,
     ):
 
         super().__init__()
@@ -223,6 +228,7 @@ class Resnet2d(nn.Module):
             raise NotImplementedError("Only `same` padding implemented.")
         self.padding = padding
         self.padding_mode = padding_mode
+        self.fully_convolutional = fully_convolutional
 
         self.levels = len(downsample_factors)
 
@@ -248,16 +254,23 @@ class Resnet2d(nn.Module):
             ]
         )
 
-        # TODO parametrize head
-        self.head = nn.Sequential(
-            nn.AdaptiveAvgPool2d(output_size=(1, 1)),
-            nn.Flatten(),
-            nn.Linear(
-                in_features=initial_fmaps *
-                fmap_inc_factor ** (self.levels - 1),
-                out_features=out_features,
-            ),
-        )
+        if self.fully_convolutional:
+            self.head = nn.Conv2d(
+                in_channels=initial_fmaps * fmap_inc_factor ** (self.levels - 1),
+                out_channels=out_features,
+                kernel_size=1,
+                bias=True,
+            )
+        else:
+            self.head = nn.Sequential(
+                nn.AdaptiveAvgPool2d(output_size=(1, 1)),
+                nn.Flatten(),
+                nn.Linear(
+                    in_features=initial_fmaps *
+                    fmap_inc_factor ** (self.levels - 1),
+                    out_features=out_features,
+                ),
+            )
 
         def init_kaiming(m):
             if self.activation == nn.ReLU:
