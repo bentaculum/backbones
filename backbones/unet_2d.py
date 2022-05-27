@@ -192,6 +192,11 @@ class Unet2d(nn.Module):
             If set to ``True``, input tensors are padded to the smallest
             feasible input size using `padding_mode`. Only implemented for
             same padding, where it's ensured that input size equals output size.
+
+        crop_input (``bool``):
+
+            If set to ``True``, input tensors are cropped to the next
+            feasible input size.
     """
 
     def __init__(
@@ -209,6 +214,7 @@ class Unet2d(nn.Module):
         padding=0,
         padding_mode='replicate',
         pad_input=False,
+        crop_input=False,
     ):
 
         super().__init__()
@@ -251,12 +257,17 @@ class Unet2d(nn.Module):
         self.padding = padding
         self.padding_mode = padding_mode
         self.pad_input = pad_input
+        self.crop_input = crop_input
+
         if pad_input and \
                 not all([all([(d - 1) / 2 == self.padding for d in k])
                          for k in kernel_sizes]):
             # pad_input only implemented for `same` padding
             raise NotImplementedError(
                 "`pad_input` only implemented for `same` padding.")
+        if pad_input and crop_input:
+            raise ValueError(
+                "`pad_input` and `crop_input` cannot both be `True`.")
 
         self.levels = len(downsample_factors) + 1
 
@@ -350,7 +361,8 @@ class Unet2d(nn.Module):
 
         if self.pad_input:
             x = self._pad_input(x)
-
+        if self.crop_input:
+            x = self._crop_input(x)
         if self.padding == 0:
             if not self.is_valid_input_size(x.shape[2:]):
                 raise ValueError((
@@ -455,6 +467,13 @@ class Unet2d(nn.Module):
             target_shape.append(_s)
 
         return self.pad(x, tuple(target_shape))
+
+    def _crop_input(self, x):
+        target_shape = []
+        for s in x.shape[-2:]:
+            target_shape.append(self.valid_input_sizes_seq(s)[0])
+
+        return self.crop(x, tuple(target_shape))
 
     def valid_input_sizes_seq(self, n):
 

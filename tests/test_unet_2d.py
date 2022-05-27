@@ -7,7 +7,8 @@ from backbones import Unet2d
 
 @pytest.mark.parametrize("downsample_factors", [[(4, 4)], [(3, 3), (2, 2)]])
 @pytest.mark.parametrize("constant_upsample", [False, True])
-def test_unet_2d_valid_output_ones(downsample_factors, constant_upsample):
+@pytest.mark.parametrize("crop_input", [False, True])
+def test_unet_2d_valid_output_ones(downsample_factors, constant_upsample, crop_input):
 
     m = Unet2d(
         in_channels=3,
@@ -19,6 +20,7 @@ def test_unet_2d_valid_output_ones(downsample_factors, constant_upsample):
         batch_norm=False,
         padding=0,
         pad_input=False,
+        crop_input=crop_input,
     )
     sizes = m.valid_input_sizes_seq(100)
 
