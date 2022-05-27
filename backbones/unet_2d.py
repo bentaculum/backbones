@@ -471,7 +471,7 @@ class Unet2d(nn.Module):
     def _crop_input(self, x):
         target_shape = []
         for s in x.shape[-2:]:
-            target_shape.append(self.valid_input_sizes_seq(s)[0])
+            target_shape.append(self.valid_input_sizes_seq(s)[-1])
 
         return self.crop(x, tuple(target_shape))
 
