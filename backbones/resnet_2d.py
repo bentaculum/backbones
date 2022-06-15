@@ -93,7 +93,10 @@ class ResidualBlock(nn.Module):
                     )
                 )
             if i < len(kernel_sizes) - 1:
-                layers.append(activation(inplace=True))
+                try:
+                    layers.append(activation(inplace=True))
+                except TypeError:
+                    layers.append(activation())
 
             rec_in = out_channels
         self.conv_block = nn.Sequential(*layers)
@@ -117,7 +120,10 @@ class ResidualBlock(nn.Module):
             )
         self.shortcut = nn.Sequential(*layers)
 
-        self.final_activation = activation(inplace=True)
+        try:
+            self.final_activation = activation(inplace=True)
+        except TypeError:
+            self.final_activation = activation()
 
     def forward(self, x):
 
@@ -163,7 +169,7 @@ class Resnet2d(nn.Module):
             convolutional layers in each residual block. If not given, each
             block will consist of two 3x3 convolutions.
 
-        activation (optional):
+        activation (``torch.nn.Module``):
 
             Which activation to use after a convolution.
 
@@ -266,8 +272,7 @@ class Resnet2d(nn.Module):
                 nn.AdaptiveAvgPool2d(output_size=(1, 1)),
                 nn.Flatten(),
                 nn.Linear(
-                    in_features=initial_fmaps *
-                    fmap_inc_factor ** (self.levels - 1),
+                    in_features=initial_fmaps * fmap_inc_factor ** (self.levels - 1),
                     out_features=out_features,
                 ),
             )
