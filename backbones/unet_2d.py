@@ -33,11 +33,9 @@ class ConvBlock(nn.Module):
             convolutional layers in each ConvBlock. If not given, each
             ConvBlock will consist of two 3x3 convolutions.
 
-        activation (``str``):
+        activation (``torch.nn.Module``):
 
-            Which activation to use after a convolution. Accepts the name
-            of any torch activation function (e.g., ``ReLU`` for
-            ``torch.nn.ReLU``).
+            Which activation to use after a convolution.
 
         batch_norm (``bool``):
 
@@ -65,7 +63,7 @@ class ConvBlock(nn.Module):
         in_channels,
         out_channels,
         kernel_sizes,
-        activation,
+        activation=nn.LeakyReLU,
         batch_norm=False,
         group_norm=False,
         padding=0,
@@ -91,7 +89,10 @@ class ConvBlock(nn.Module):
                     num_groups=group_norm,
                     num_channels=out_channels,
                 ))
-            layers.append(getattr(nn, activation)())
+            try:
+                layers.append(activation(inplace=True))
+            except TypeError:
+                layers.append(activation())
 
             in_channels = out_channels
 
@@ -162,11 +163,9 @@ class Unet2d(nn.Module):
             convolutional layers in each ConvBlock. If not given, each
             ConvBlock will consist of two 3x3 convolutions.
 
-        activation (optional):
+        activation (``torch.nn.Module):
 
-            Which activation to use after a convolution. Accepts the name
-            of any torch activation function (e.g., ``ReLU`` for
-            ``torch.nn.ReLU``).
+            Which activation to use after a convolution.
 
         batch_norm (optional):
 
@@ -207,7 +206,7 @@ class Unet2d(nn.Module):
         downsample_factors,
         out_channels,
         kernel_sizes=((3, 3), (3, 3)),
-        activation='LeakyReLU',
+        activation=nn.LeakyReLU,
         constant_upsample=True,
         batch_norm=False,
         group_norm=False,
@@ -338,9 +337,9 @@ class Unet2d(nn.Module):
 
         # Initialize all Conv2d with Kaiming init
         def init_kaiming(m):
-            if self.activation == 'ReLU':
+            if self.activation == nn.ReLU:
                 nonlinearity = 'relu'
-            elif self.activation == 'LeakyReLU':
+            elif self.activation == nn.LeakyReLU:
                 nonlinearity = 'leaky_relu'
             else:
                 raise ValueError(
@@ -351,7 +350,7 @@ class Unet2d(nn.Module):
                     nonlinearity=nonlinearity)
                 nn.init.zeros_(m.bias)
 
-        if activation in ('ReLU', 'LeakyReLU'):
+        if activation in (nn.ReLU, nn.LeakyReLU):
             self.apply(init_kaiming)
             logger.debug("Initialize conv weights with Kaiming init.")
 
