@@ -109,10 +109,10 @@ class ConvNeXtBlock(nn.Module):
        Implementation from https://github.com/facebookresearch/ConvNeXt/blob/main/models/convnext.py
     Args:
         in_channels (int): _description_
-        drop_path (float, optional): _description_. Defaults to 0..
+        drop_path_rate (float, optional): _description_. Defaults to 0..
         layer_scale_init_value (float, optional): _description_. Defaults to 1e-6.
     """
-    def __init__(self, in_channels, drop_path=0., layer_scale_init_value=1e-6):
+    def __init__(self, in_channels, drop_path_rate=0., layer_scale_init_value=1e-6):
         super().__init__()
         self.dwconv = nn.Conv2d(in_channels=in_channels,
                                 out_channels=in_channels,
@@ -125,8 +125,8 @@ class ConvNeXtBlock(nn.Module):
         self.activation = nn.GELU()
         self.gamma = nn.Parameter(
             layer_scale_init_value*torch.ones(in_channels), requires_grad=True,
-        ) if drop_path > 0. else None
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        ) if drop_path_rate > 0. else None
+        self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. else nn.Identity()
 
     def forward(self, inp):
         x_pr = self.dwconv(inp)
@@ -185,7 +185,7 @@ class ConvNeXt2d(nn.Module):
         for s in range(self.levels):
             stage = nn.Sequential(*[
                 ConvNeXtBlock(in_channels=n_channels_per_stage[s],
-                              drop_path=dp_rates[s+j],
+                              drop_path_rate=dp_rates[s+j],
                               layer_scale_init_value=layer_scale_init_value)
             for j in range(self.depths[s])])
             self.stages.append(stage)
