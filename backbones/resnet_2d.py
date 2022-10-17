@@ -70,10 +70,10 @@ class ResidualBlock(nn.Module):
 
         super().__init__()
 
-        layers = []
+        conv_block = []
         rec_in = in_channels
         for i, k in enumerate(kernel_sizes):
-            layers.append(
+            conv_block.append(
                 nn.Conv2d(
                     in_channels=rec_in,
                     out_channels=out_channels,
@@ -84,9 +84,9 @@ class ResidualBlock(nn.Module):
                 )
             )
             if batch_norm:
-                layers.append(nn.BatchNorm2d(out_channels))
+                conv_block.append(nn.BatchNorm2d(out_channels))
             if isinstance(group_norm, int) and group_norm > 0:
-                layers.append(
+                conv_block.append(
                     nn.GroupNorm(
                         num_groups=group_norm,
                         num_channels=out_channels,
@@ -94,14 +94,14 @@ class ResidualBlock(nn.Module):
                 )
             if i < len(kernel_sizes) - 1:
                 try:
-                    layers.append(activation(inplace=True))
+                    conv_block.append(activation(inplace=True))
                 except TypeError:
-                    layers.append(activation())
+                    conv_block.append(activation())
 
             rec_in = out_channels
-        self.conv_block = nn.Sequential(*layers)
+        self.conv_block = nn.Sequential(*conv_block)
 
-        layers = [
+        shortcut = [
             nn.Conv2d(
                 in_channels,
                 out_channels,
@@ -110,15 +110,15 @@ class ResidualBlock(nn.Module):
             )
         ]
         if batch_norm:
-            layers.append(nn.BatchNorm2d(out_channels))
+            shortcut.append(nn.BatchNorm2d(out_channels))
         if isinstance(group_norm, int) and group_norm > 0:
-            layers.append(
+            shortcut.append(
                 nn.GroupNorm(
                     num_groups=group_norm,
                     num_channels=out_channels,
                 )
             )
-        self.shortcut = nn.Sequential(*layers)
+        self.shortcut = nn.Sequential(*shortcut)
 
         try:
             self.final_activation = activation(inplace=True)
@@ -217,7 +217,7 @@ class Resnet2d(nn.Module):
 
         self.in_channels = in_channels
         self.initial_fmaps = initial_fmaps
-        self.fmap_ic_factor = fmap_inc_factor
+        self.fmap_inc_factor = fmap_inc_factor
         self.downsample_facors = downsample_factors
         self.out_features = out_features
         self.kernel_sizes = kernel_sizes
@@ -246,8 +246,8 @@ class Resnet2d(nn.Module):
                 ResidualBlock(
                     in_channels=in_channels
                     if level == 0
-                    else initial_fmaps * fmap_inc_factor ** (level - 1),
-                    out_channels=initial_fmaps * fmap_inc_factor**level,
+                    else int(initial_fmaps * fmap_inc_factor ** (level - 1)),
+                    out_channels=int(initial_fmaps * fmap_inc_factor**level),
                     kernel_sizes=kernel_sizes,
                     downsample_factor=downsample_factors[level],
                     activation=activation,
@@ -262,7 +262,7 @@ class Resnet2d(nn.Module):
 
         if self.fully_convolutional:
             self.head = nn.Conv2d(
-                in_channels=initial_fmaps * fmap_inc_factor ** (self.levels - 1),
+                in_channels=int(initial_fmaps * fmap_inc_factor ** (self.levels - 1)),
                 out_channels=out_features,
                 kernel_size=1,
                 bias=True,
@@ -272,7 +272,9 @@ class Resnet2d(nn.Module):
                 nn.AdaptiveAvgPool2d(output_size=(1, 1)),
                 nn.Flatten(),
                 nn.Linear(
-                    in_features=initial_fmaps * fmap_inc_factor ** (self.levels - 1),
+                    in_features=int(
+                        initial_fmaps * fmap_inc_factor ** (self.levels - 1)
+                    ),
                     out_features=out_features,
                 ),
             )
