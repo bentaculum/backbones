@@ -26,7 +26,7 @@ class ResidualBlock(nn.Module):
             convolutional layers in each ConvBlock. If not given, each
             ConvBlock will consist of two 3x3 convolutions.
 
-        downsample_factor (``int``):
+        downsample_factor (``int`` or tuple of ``int``):
 
             Use as stride in the first convolution.
 
@@ -72,19 +72,32 @@ class ResidualBlock(nn.Module):
 
         conv_block = []
         rec_in = in_channels
+        dims = len(kernel_sizes[0])
+        conv = {
+            2: nn.Conv2d,
+            3: nn.Conv3d,
+        }[dims]
+        batchnorm = {
+            2: nn.BatchNorm2d,
+            3: nn.BatchNorm3d,
+        }[dims]
+
         for i, k in enumerate(kernel_sizes):
+            # If kernel size is 1 in a dimension, do not pad.
+            dim_padding = tuple(0 if _k == 1 else padding for _k in k)
+
             conv_block.append(
-                nn.Conv2d(
+                conv(
                     in_channels=rec_in,
                     out_channels=out_channels,
                     kernel_size=k,
-                    padding=padding,
+                    padding=dim_padding,
                     padding_mode=padding_mode,
                     stride=downsample_factor if i == 0 else 1,
                 )
             )
             if batch_norm:
-                conv_block.append(nn.BatchNorm2d(out_channels))
+                conv_block.append(batchnorm(out_channels))
             if isinstance(group_norm, int) and group_norm > 0:
                 conv_block.append(
                     nn.GroupNorm(
@@ -102,7 +115,7 @@ class ResidualBlock(nn.Module):
         self.conv_block = nn.Sequential(*conv_block)
 
         shortcut = [
-            nn.Conv2d(
+            conv(
                 in_channels,
                 out_channels,
                 kernel_size=1,
@@ -110,7 +123,7 @@ class ResidualBlock(nn.Module):
             )
         ]
         if batch_norm:
-            shortcut.append(nn.BatchNorm2d(out_channels))
+            shortcut.append(batchnorm(out_channels))
         if isinstance(group_norm, int) and group_norm > 0:
             shortcut.append(
                 nn.GroupNorm(
@@ -130,10 +143,10 @@ class ResidualBlock(nn.Module):
         return self.final_activation(self.conv_block(x) + self.shortcut(x))
 
 
-class Resnet2d(nn.Module):
-    """Configurable Resnet-like CNN.
+class Resnet(nn.Module):
+    """Configurable Resnet-like CNN, for 2d and 3d inputs.
 
-    Input tensors are expected to be of shape ``(B, C, H, W)``.
+    Input tensors are expected to be of shape ``(B, C, (Z), Y, X)``.
     Output tensors are of shape ``(B, out_features)``.
 
     Args:
@@ -150,7 +163,7 @@ class Resnet2d(nn.Module):
 
         downsample_factors:
 
-            Tuple of ints to use to downsample the
+            Tuple of tuple of ints to use to downsample the
             feature in each residual block.
 
         out_features:
@@ -165,9 +178,10 @@ class Resnet2d(nn.Module):
 
         kernel_sizes (optional):
 
-            Tuple of ints. The number of ints determines the number of
-            convolutional layers in each residual block. If not given, each
-            block will consist of two 3x3 convolutions.
+            Tuple of of tuple of ints, or tuple of tuple of tuple of ints.
+            The number of ints determines the number of convolutional layers in
+            each residual block. If not given, each block will consist of two
+            3x3 convolutions.
 
         activation (``torch.nn.Module``):
 
@@ -189,22 +203,23 @@ class Resnet2d(nn.Module):
 
         padding_mode (``str``):
 
-            `torch.nn.Conv2d` padding modes: `zeros`, `reflect`, `replicate` or
-            `circular`.
+            `torch.nn.Conv2/3d` padding modes: `zeros`, `reflect`, `replicate`
+            or `circular`.
 
         fully_convolutional (``bool``):
 
-            If set to ``True``, the head will not use global average pooling and a linear layer.
+            If set to ``True``, the head will not use global average pooling
+            and a linear layer.
     """
 
     def __init__(
         self,
         in_channels,
         initial_fmaps,
-        downsample_factors,
         out_features,
+        downsample_factors=((2, 2), (2, 2), (2, 2)),
         fmap_inc_factor=2,
-        kernel_sizes=(3, 3),
+        kernel_sizes=(((3, 3), (3, 3),),),
         activation=nn.LeakyReLU,
         batch_norm=True,
         group_norm=False,
@@ -218,8 +233,8 @@ class Resnet2d(nn.Module):
         self.in_channels = in_channels
         self.initial_fmaps = initial_fmaps
         self.fmap_inc_factor = fmap_inc_factor
-        self.downsample_facors = downsample_factors
         self.out_features = out_features
+        self.downsample_facors = downsample_factors
         self.kernel_sizes = kernel_sizes
         self.activation = activation
 
@@ -230,8 +245,27 @@ class Resnet2d(nn.Module):
             raise ValueError(f"{group_norm=} bigger {initial_fmaps=}.")
         self.group_norm = group_norm
 
-        if not np.all((np.array(kernel_sizes) - 1) / 2 == padding):
-            raise NotImplementedError("Only `same` padding implemented.")
+        try:
+            assert isinstance(kernel_sizes[0][0][0], int)
+        except (TypeError, AssertionError):
+            raise ValueError("kernel_sizes expected to be a 3-level nested"
+                             "tuple (network layer, convs per block, spatial dims)")
+
+        try:
+            assert isinstance(downsample_factors[0][0], int)
+        except (TypeError, AssertionError):
+            raise ValueError("downsample factors expected to be a 2-level"
+                             " nested tuple(conv block, spatial dims)")
+
+        if not (len(kernel_sizes) == 1 or len(kernel_sizes) == len(downsample_factors)):
+            raise ValueError("kernel_sizes and downsamle_factors dimensionalities do not correspond.")
+        if len(kernel_sizes) == 1:
+            kernel_sizes = kernel_sizes * len(downsample_factors)
+
+        for k in kernel_sizes:
+            if not np.all(np.logical_or((np.array(k) - 1) / 2 == padding, np.array(k) == 1)):
+                raise NotImplementedError("Only `same` padding implemented.")
+
         self.padding = padding
         self.padding_mode = padding_mode
         self.fully_convolutional = fully_convolutional
@@ -248,7 +282,7 @@ class Resnet2d(nn.Module):
                     if level == 0
                     else int(initial_fmaps * fmap_inc_factor ** (level - 1)),
                     out_channels=int(initial_fmaps * fmap_inc_factor**level),
-                    kernel_sizes=kernel_sizes,
+                    kernel_sizes=kernel_sizes[level],
                     downsample_factor=downsample_factors[level],
                     activation=activation,
                     batch_norm=batch_norm,
@@ -260,16 +294,26 @@ class Resnet2d(nn.Module):
             ]
         )
 
+        self.dims = len(kernel_sizes[0][0])
+
         if self.fully_convolutional:
-            self.head = nn.Conv2d(
+            conv = {
+                2: nn.Conv2d,
+                3: nn.Conv3d,
+            }[self.dims]
+            self.head = conv(
                 in_channels=int(initial_fmaps * fmap_inc_factor ** (self.levels - 1)),
                 out_channels=out_features,
                 kernel_size=1,
                 bias=True,
             )
         else:
+            adaptive_pool = {
+                2: nn.AdaptiveAvgPool2d,
+                3: nn.AdaptiveAvgPool3d,
+            }[self.dims]
             self.head = nn.Sequential(
-                nn.AdaptiveAvgPool2d(output_size=(1, 1)),
+                adaptive_pool(output_size=1),
                 nn.Flatten(),
                 nn.Linear(
                     in_features=int(
@@ -288,7 +332,7 @@ class Resnet2d(nn.Module):
                 raise ValueError(
                     f"Kaiming init not applicable for activation {self.activation}."
                 )
-            if isinstance(m, nn.Conv2d):
+            if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):
                 nn.init.kaiming_normal_(m.weight, nonlinearity=nonlinearity)
                 nn.init.zeros_(m.bias)
 
@@ -297,10 +341,27 @@ class Resnet2d(nn.Module):
             logger.debug("Initialize conv weights with Kaiming init.")
 
     def forward(self, x):
-
+        if x.ndim != self.dims + 2:
+            raise ValueError(
+                f"{x.ndim}D input given, {self.dims + 2}D input expected.")
         x = self.input_block(x)
         for b in self.blocks:
             x = b(x)
         x = self.head(x)
 
         return x
+
+
+class Resnet2d(Resnet):
+    """Backwards compatible.
+
+    Both ``downsample_factors`` and ``kernel_sizes`` are expected to be a
+    single-level tuples. 
+    """
+
+    def __init__(self, *args, **kwargs):
+        kwargs["downsample_factors"] = tuple(
+            (d, d) for d in kwargs["downsample_factors"])
+        kwargs["kernel_sizes"] = (tuple(
+            (k, k) for k in kwargs["kernel_sizes"]),)
+        super().__init__(*args, **kwargs)
