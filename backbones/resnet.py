@@ -234,7 +234,7 @@ class Resnet(nn.Module):
         self.initial_fmaps = initial_fmaps
         self.fmap_inc_factor = fmap_inc_factor
         self.out_features = out_features
-        self.downsample_facors = downsample_factors
+        self.downsample_factors = downsample_factors
         self.kernel_sizes = kernel_sizes
         self.activation = activation
 
